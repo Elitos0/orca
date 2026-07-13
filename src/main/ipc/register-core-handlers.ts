@@ -35,6 +35,7 @@ import { registerComputerUsePermissionHandlers } from './computer-use-permission
 import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
+import { registerAgentCatalogHandlers } from './agent-catalog'
 import { registerDiagnosticsHandlers } from './diagnostics'
 import { registerSkillsHandlers } from './skills'
 import { registerWorkspaceSpaceHandlers } from './workspace-space'
@@ -76,6 +77,7 @@ import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import {
   getSavedRuntimeAiVaultHostInfos,
+  resolveRuntimeAiVaultResumeDetails,
   scanRuntimeAiVaultSessions
 } from '../ai-vault/runtime-session-scanner'
 
@@ -156,6 +158,7 @@ export function registerCoreHandlers(
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
+  registerAgentCatalogHandlers(store)
   registerSkillsHandlers(store)
   if (automations) {
     registerAutomationHandlers(store, automations)
@@ -193,7 +196,12 @@ export function registerCoreHandlers(
     getActiveRuntimeAiVaultHostInfos: () =>
       getSavedRuntimeAiVaultHostInfos(app.getPath('userData')),
     scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
-      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options)
+      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options),
+    resolveRuntimeAiVaultResumeDetails: (environmentId, entry) =>
+      resolveRuntimeAiVaultResumeDetails(app.getPath('userData'), environmentId, entry),
+    // Host settings for the copy-command assembly (cmd overrides, default
+    // args/env, Windows shell); the store owns the authoritative values.
+    getVaultResumeSettings: () => store.getSettings?.()
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)

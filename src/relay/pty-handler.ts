@@ -78,6 +78,9 @@ type ManagedPty = {
   physicalExit?: PhysicalExitTracker
   forceKillSent?: boolean
   gracefulKillSent?: boolean
+  /** Host admission launch token persisted at creation so a PTY that outlives
+   *  main self-identifies by token during crash reconciliation. */
+  launchToken?: string
 }
 
 type PendingPtyOutput = {
@@ -225,6 +228,7 @@ type SerializedPtyEntry = {
   envToDelete?: string[]
   /** Optional for state serialized by relays predating the credential guard. */
   gitCredentialPromptGuarded?: boolean
+  launchToken?: string
 }
 
 function sanitizeEnvToDelete(value: unknown): string[] {
@@ -825,6 +829,10 @@ export class PtyHandler {
     const terminalHandle =
       typeof env?.ORCA_TERMINAL_HANDLE === 'string' ? env.ORCA_TERMINAL_HANDLE : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
+    const launchToken =
+      typeof params.launchToken === 'string' && params.launchToken.length > 0
+        ? params.launchToken
+        : undefined
     const terminalWindowsWslDistro =
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
@@ -904,6 +912,9 @@ export class PtyHandler {
       envToDelete,
       gitCredentialPromptGuarded,
       ...(terminalHandle ? { terminalHandle } : {}),
+      // Why: association at creation, never a follow-up write, so a surviving
+      // PTY is attributable after a main crash.
+      ...(launchToken ? { launchToken } : {}),
       ...(shouldProviderDeliverCommand
         ? {
             startupCommand: {
@@ -1235,7 +1246,8 @@ export class PtyHandler {
         ...(managed.explicitTerm !== undefined ? { explicitTerm: managed.explicitTerm } : {}),
         envToDelete: managed.envToDelete,
         gitCredentialPromptGuarded: managed.gitCredentialPromptGuarded,
-        ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
+        ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
+        ...(managed.launchToken ? { launchToken: managed.launchToken } : {})
       })
     }
     return JSON.stringify(entries)
@@ -1334,7 +1346,10 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
-      ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
+      ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
+      // Why: preserve token attribution across relay revive so a reconnected
+      // runtime can still identify the surviving launch.
+      ...(entry.launchToken ? { launchToken: entry.launchToken } : {})
     })
 
     const match = entry.id.match(/^pty-(\d+)$/)
